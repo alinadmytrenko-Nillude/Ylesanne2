@@ -1,49 +1,338 @@
 import pygame
 import sys
+import math
 
+# ── värvid ──────────────────────────────────────────────────────────────
+BLACK  = (10,  10,  10)
+WHITE  = (255, 255, 255)
+ACCENT = (120, 200, 120)   # roheline aktsent
+DIM    = (80,  80,  80)
+PANEL  = (22,  22,  22)
+HOVER  = (40,  40,  40)
+ERROR  = (220, 80,  80)
+THINL  = (50,  50,  50)
 
-def draw_grid(screen, rows, cols, line_color, cell_size):
-    width = cols * cell_size
-    height = rows * cell_size
+PALETTE = [
+    ("Valge",    (240, 240, 240)),
+    ("Hall",     (160, 160, 160)),
+    ("Must",     (20,  20,  20)),
+    ("Roheline", (80,  200, 120)),
+    ("Sinine",   (80,  140, 220)),
+    ("Lilla",    (160, 100, 220)),
+    ("Punane",   (220, 80,  80)),
+    ("Oranž",    (230, 140, 60)),
+    ("Kollane",  (220, 200, 60)),
+    ("Roosa",    (220, 120, 160)),
+]
 
-    for x in range(0, width + 1, cell_size):
-        pygame.draw.line(screen, line_color, (x, 0), (x, height))
+# ── abifunktsioonid ──────────────────────────────────────────────────────
+def lerp_color(a, b, t):
+    return tuple(int(a[i] + (b[i]-a[i])*t) for i in range(3))
 
-    for y in range(0, height + 1, cell_size):
-        pygame.draw.line(screen, line_color, (0, y), (width, y))
+def draw_rounded_rect(surf, color, rect, r, width=0):
+    pygame.draw.rect(surf, color, rect, width, border_radius=r)
 
-
-def main(cell_size=20, rows=24, cols=32, line_color=(255, 0, 0), bg_color=(0, 255, 128)):
+# ── seadistuste aken ─────────────────────────────────────────────────────
+def settings_window():
     pygame.init()
+    W, H = 460, 580
+    screen = pygame.display.set_mode((W, H))
+    pygame.display.set_caption("Seadistused")
+    clock  = pygame.time.Clock()
 
-    width = cols * cell_size
-    height = rows * cell_size
+    # fondid
+    F_TITLE  = pygame.font.SysFont("Courier New", 13, bold=True)
+    F_LABEL  = pygame.font.SysFont("Courier New", 12)
+    F_INPUT  = pygame.font.SysFont("Courier New", 18, bold=True)
+    F_SMALL  = pygame.font.SysFont("Courier New", 11)
+    F_BTN    = pygame.font.SysFont("Courier New", 14, bold=True)
 
-    screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption("Harjutamine")
+    # ── väljad ──────────────────────────────────────────────────────────
+    fields = [
+        {"key": "cell",  "label": "RUUDU SUURUS  (px)", "value": "20", "active": False, "err": ""},
+        {"key": "rows",  "label": "RIDADE ARV",         "value": "24", "active": False, "err": ""},
+        {"key": "cols",  "label": "VEERGUDE ARV",       "value": "32", "active": False, "err": ""},
+    ]
+    FIELD_X, FIELD_W, FIELD_H = 180, 220, 44
+    field_rects = [pygame.Rect(FIELD_X, 110 + i*76, FIELD_W, FIELD_H) for i in range(3)]
+
+    # ── värvivalijad ────────────────────────────────────────────────────
+    sel_bg   = 0   # tausta värv indeks PALETTE-s
+    sel_line = 6   # joone värv indeks
+
+    SWATCH_SIZE = 28
+    SWATCH_GAP  = 6
+    SWATCHES_PER_ROW = 5
+    SWATCH_START_X = 50
+    BG_SWATCH_Y   = 380
+    LINE_SWATCH_Y = 460
+
+    def swatch_rect(idx, base_y):
+        col = idx % SWATCHES_PER_ROW
+        row = idx // SWATCHES_PER_ROW
+        x = SWATCH_START_X + col*(SWATCH_SIZE+SWATCH_GAP)
+        y = base_y + row*(SWATCH_SIZE+SWATCH_GAP)
+        return pygame.Rect(x, y, SWATCH_SIZE, SWATCH_SIZE)
+
+    # ── OK nupp ─────────────────────────────────────────────────────────
+    ok_rect   = pygame.Rect(W//2 - 90, H - 66, 180, 44)
+    ok_hover  = False
+    ok_anim   = 0.0   # 0..1 hover animatsioon
+
+    # ── kursor-blink ────────────────────────────────────────────────────
+    blink = 0
+    ticks = 0
 
     running = True
     while running:
+        dt = clock.tick(60)
+        ticks += dt
+        blink = (ticks // 530) % 2  # kursor vilgub
+
+        mx, my = pygame.mouse.get_pos()
+
+        # OK nupu hover
+        new_hover = ok_rect.collidepoint(mx, my)
+        if new_hover != ok_hover:
+            ok_hover = new_hover
+        ok_anim += (0.18 if ok_hover else -0.18)
+        ok_anim  = max(0.0, min(1.0, ok_anim))
+
+        # ── joonista ────────────────────────────────────────────────────
+        screen.fill(BLACK)
+
+        # peen piirjoon akna servadel
+        pygame.draw.rect(screen, THINL, (0, 0, W, H), 1)
+
+        # pealkiri
+        t1 = F_TITLE.render("RUUDUSTIKU", True, ACCENT)
+        t2 = F_TITLE.render("SEADISTUSED", True, WHITE)
+        screen.blit(t1, (50, 36))
+        screen.blit(t2, (50 + t1.get_width() + 8, 36))
+
+        # horisontaalne joon pealkirja all
+        pygame.draw.line(screen, THINL, (50, 60), (W-50, 60), 1)
+
+        # ── tekstiväljad ────────────────────────────────────────────────
+        for i, (field, rect) in enumerate(zip(fields, field_rects)):
+            is_active = field["active"]
+            lbl = F_LABEL.render(field["label"], True, ACCENT if is_active else DIM)
+            screen.blit(lbl, (50, rect.y - 18))
+
+            border_col = ACCENT if is_active else THINL
+            draw_rounded_rect(screen, PANEL, rect, 4)
+            draw_rounded_rect(screen, border_col, rect, 4, 1)
+
+            val_surf = F_INPUT.render(field["value"], True, WHITE)
+            screen.blit(val_surf, (rect.x + 14, rect.y + 12))
+
+            # vilkuv kursor
+            if is_active and blink:
+                cx = rect.x + 14 + val_surf.get_width() + 3
+                pygame.draw.line(screen, ACCENT, (cx, rect.y+10), (cx, rect.y+32), 2)
+
+            if field["err"]:
+                e = F_SMALL.render(field["err"], True, ERROR)
+                screen.blit(e, (rect.x, rect.y + FIELD_H + 3))
+
+        # ── värvivalijad ────────────────────────────────────────────────
+        pygame.draw.line(screen, THINL, (50, 355), (W-50, 355), 1)
+
+        lbl_bg   = F_LABEL.render("TAUSTAVÄRV", True, DIM)
+        lbl_line = F_LABEL.render("JOONE VÄRV", True, DIM)
+        screen.blit(lbl_bg,   (50, BG_SWATCH_Y   - 18))
+        screen.blit(lbl_line, (50, LINE_SWATCH_Y - 18))
+
+        for idx, (name, col) in enumerate(PALETTE):
+            for (sel, base_y) in [(sel_bg, BG_SWATCH_Y), (sel_line, LINE_SWATCH_Y)]:
+                r = swatch_rect(idx, base_y)
+                draw_rounded_rect(screen, col, r, 4)
+                if sel == idx:
+                    draw_rounded_rect(screen, WHITE, r, 4, 2)
+                elif r.collidepoint(mx, my):
+                    draw_rounded_rect(screen, DIM, r, 4, 1)
+
+        # värvinimede kuvamine valitud värvide kõrval
+        _, bg_col   = PALETTE[sel_bg]
+        _, line_col = PALETTE[sel_line]
+        nx = SWATCH_START_X + SWATCHES_PER_ROW*(SWATCH_SIZE+SWATCH_GAP) + 12
+
+        pygame.draw.rect(screen, bg_col,   (nx, BG_SWATCH_Y,   40, SWATCH_SIZE), border_radius=3)
+        pygame.draw.rect(screen, line_col, (nx, LINE_SWATCH_Y, 40, SWATCH_SIZE), border_radius=3)
+        screen.blit(F_SMALL.render(PALETTE[sel_bg][0],   True, WHITE), (nx+46, BG_SWATCH_Y+8))
+        screen.blit(F_SMALL.render(PALETTE[sel_line][0], True, WHITE), (nx+46, LINE_SWATCH_Y+8))
+
+        # ── OK nupp ─────────────────────────────────────────────────────
+        pygame.draw.line(screen, THINL, (50, H-86), (W-50, H-86), 1)
+        btn_col = lerp_color(PANEL, ACCENT, ok_anim)
+        txt_col = lerp_color(DIM,   BLACK,  ok_anim)
+        draw_rounded_rect(screen, btn_col, ok_rect, 6)
+        draw_rounded_rect(screen, lerp_color(THINL, ACCENT, ok_anim), ok_rect, 6, 1)
+        btn_txt = F_BTN.render("ALUSTA", True, lerp_color(WHITE, BLACK, ok_anim))
+        screen.blit(btn_txt, (ok_rect.centerx - btn_txt.get_width()//2,
+                               ok_rect.centery - btn_txt.get_height()//2))
+
+        pygame.display.flip()
+
+        # ── sündmused ───────────────────────────────────────────────────
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # tekstiväljad
+                for i, rect in enumerate(field_rects):
+                    fields[i]["active"] = rect.collidepoint(mx, my)
+
+                # värvid
+                for idx in range(len(PALETTE)):
+                    if swatch_rect(idx, BG_SWATCH_Y).collidepoint(mx, my):
+                        sel_bg = idx
+                    if swatch_rect(idx, LINE_SWATCH_Y).collidepoint(mx, my):
+                        sel_line = idx
+
+                # OK nupp
+                if ok_rect.collidepoint(mx, my):
+                    valid = True
+                    for field in fields:
+                        field["err"] = ""
+                        try:
+                            v = int(field["value"])
+                            if v <= 0: raise ValueError
+                        except ValueError:
+                            field["err"] = "! sisesta positiivne arv"
+                            valid = False
+                    if valid:
+                        return (int(fields[0]["value"]),
+                                int(fields[1]["value"]),
+                                int(fields[2]["value"]),
+                                PALETTE[sel_bg][1],
+                                PALETTE[sel_line][1])
+
+            if event.type == pygame.KEYDOWN:
+                for field in fields:
+                    if field["active"]:
+                        if event.key == pygame.K_BACKSPACE:
+                            field["value"] = field["value"][:-1]
+                        elif event.key == pygame.K_TAB:
+                            # liigu järgmisele väljale
+                            i = next(j for j,f in enumerate(fields) if f["active"])
+                            fields[i]["active"] = False
+                            fields[(i+1) % len(fields)]["active"] = True
+                        elif event.key == pygame.K_RETURN:
+                            field["active"] = False
+                        elif event.unicode.isdigit():
+                            field["value"] += event.unicode
+
+# ── ruudustiku aken koos värvimisega ────────────────────────────────────
+def grid_window(cell_size, rows, cols, bg_color, line_color):
+    W = cols * cell_size
+    H = rows * cell_size
+    screen = pygame.display.set_mode((W, H))
+    pygame.display.set_caption("Harjutamine  —  LHiir: värvi  |  RHiir: kustuta  |  ESC: välju")
+    clock = pygame.time.Clock()
+
+    # iga rakk saab oma värvi (None = taustavärv)
+    cells = [[None]*cols for _ in range(rows)]
+
+    # värvivalija paneel all
+    PANEL_H      = 48
+    SWATCH_R     = 16
+    SWATCH_GAP   = 10
+    paint_colors = [c for _, c in PALETTE]
+    sel_paint    = 0   # praegu valitud värv maalimiseks
+
+    def swatch_cx(i):
+        total = len(paint_colors)*(SWATCH_R*2+SWATCH_GAP) - SWATCH_GAP
+        start = W//2 - total//2
+        return start + i*(SWATCH_R*2+SWATCH_GAP) + SWATCH_R
+
+    def swatch_cy():
+        return H - PANEL_H//2
+
+    drawing = False
+
+    running = True
+    while running:
+        clock.tick(60)
+        mx, my = pygame.mouse.get_pos()
+
+        # ── joonista ────────────────────────────────────────────────────
+        screen.fill(bg_color)
+
+        # rakud
+        for r in range(rows):
+            for c in range(cols):
+                col = cells[r][c]
+                if col is not None:
+                    pygame.draw.rect(screen, col,
+                        (c*cell_size, r*cell_size, cell_size, cell_size))
+
+        # ruudustik
+        for x in range(0, W+1, cell_size):
+            pygame.draw.line(screen, line_color, (x, 0), (x, H-PANEL_H))
+        for y in range(0, H-PANEL_H+1, cell_size):
+            pygame.draw.line(screen, line_color, (0, y), (W, y))
+
+        # alumine paneel
+        panel_surf = pygame.Surface((W, PANEL_H), pygame.SRCALPHA)
+        panel_surf.fill((10, 10, 10, 210))
+        screen.blit(panel_surf, (0, H-PANEL_H))
+
+        # värvid paneelil
+        for i, col in enumerate(paint_colors):
+            cx = swatch_cx(i)
+            cy = swatch_cy()
+            pygame.draw.circle(screen, col,       (cx, cy), SWATCH_R)
+            if i == sel_paint:
+                pygame.draw.circle(screen, WHITE, (cx, cy), SWATCH_R+3, 2)
+            elif math.hypot(mx-cx, my-cy) < SWATCH_R+4:
+                pygame.draw.circle(screen, (180,180,180), (cx, cy), SWATCH_R+2, 1)
+
+        pygame.display.flip()
+
+        # ── sündmused ───────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running = False
 
-        screen.fill(bg_color)
-        draw_grid(screen, rows, cols, line_color, cell_size)
-        pygame.display.flip()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # värvivalik paneelil
+                for i in range(len(paint_colors)):
+                    cx = swatch_cx(i)
+                    cy = swatch_cy()
+                    if math.hypot(mx-cx, my-cy) < SWATCH_R+4:
+                        sel_paint = i
+                        drawing = False
+                        break
+                else:
+                    drawing = True
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                drawing = False
+
+        # ── maalimine hoidmisel ──────────────────────────────────────────
+        if drawing:
+            buttons = pygame.mouse.get_pressed()
+            px, py = pygame.mouse.get_pos()
+            if py < H - PANEL_H:
+                c = px // cell_size
+                r = py // cell_size
+                if 0 <= r < rows and 0 <= c < cols:
+                    if buttons[0]:   # vasak - värvi
+                        cells[r][c] = paint_colors[sel_paint]
+                    elif buttons[2]: # parem - kustuta
+                        cells[r][c] = None
 
     pygame.quit()
     sys.exit()
 
+# ── käivitamine ─────────────────────────────────────────────────────────
+def main():
+    cell_size, rows, cols, bg_color, line_color = settings_window()
+    grid_window(cell_size, rows, cols, bg_color, line_color)
 
 if __name__ == "__main__":
-    main(
-        cell_size=20,
-        rows=24,
-        cols=32,
-        line_color=(255, 0, 0),
-        bg_color=(0, 255, 128)
-    )
+    main()
