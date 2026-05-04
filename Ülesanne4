@@ -1,0 +1,70 @@
+import pygame, sys, random
+pygame.init()
+
+# screen settings
+screenX, screenY = 640, 480
+screen = pygame.display.set_mode([screenX, screenY])
+pygame.display.set_caption("Vastutulevad autod")
+clock = pygame.time.Clock()
+
+# load images
+taust = pygame.image.load("bg_rally.jpg")
+taust = pygame.transform.scale(taust, [screenX, screenY])
+
+punane_auto = pygame.image.load("f1_red.png")
+punane_auto = pygame.transform.scale(punane_auto, [60, 100])
+
+sinine_auto = pygame.image.load("f1_blue.png")
+sinine_auto = pygame.transform.scale(sinine_auto, [60, 100])
+# flip blue car so it faces downward
+sinine_auto = pygame.transform.flip(sinine_auto, False, True)
+
+# red car position — center of screen
+redX = screenX // 2 - 30
+redY = screenY // 2 - 50
+
+# blue cars: list of [x, y, speed]
+# three cars, each starts at a different random height above screen
+autod = []
+lanes = [180, 300, 420]   # x positions of lanes
+for lane in lanes:
+    startY = random.randint(-300, -50)
+    speed = random.randint(2, 5)
+    autod.append([lane, startY, speed])
+
+# score
+skoor = 0
+font = pygame.font.SysFont("Arial", 28, bold=True)
+
+# main game loop
+gameover = False
+while not gameover:
+    clock.tick(60)   # limit to 60 FPS
+
+    # handle quit event
+    for i in pygame.event.get():
+        if i.type == pygame.QUIT:
+            sys.exit()
+
+    # draw background
+    screen.blit(taust, (0, 0))
+
+    # draw red car — stays in the center, does not move
+    screen.blit(punane_auto, (redX, redY))
+
+    # draw and move blue cars
+    for i in range(len(autod)):
+        screen.blit(sinine_auto, (autod[i][0], autod[i][1]))
+        autod[i][1] += autod[i][2]   # move car downward
+
+        # if car reached the bottom of the screen
+        if autod[i][1] > screenY:
+            skoor += 1                               # add 1 point to score
+            autod[i][1] = random.randint(-300, -50)  # reset to above screen
+            autod[i][2] = random.randint(2, 5)      # assign new random speed
+
+    # display score — number must be converted to string
+    skoor_text = font.render("Skoor: " + str(skoor), True, (255, 255, 0))
+    screen.blit(skoor_text, (10, 10))
+
+    pygame.display.flip()   # update the displaypygame.quit()
