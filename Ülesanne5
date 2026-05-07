@@ -1,0 +1,94 @@
+import pygame, random
+pygame.init()
+
+# Настройки
+screenX = 640
+screenY = 480
+screen = pygame.display.set_mode([screenX, screenY])
+pygame.display.set_caption("PingPong")
+clock = pygame.time.Clock()
+bgImage = pygame.image.load("mem.png")
+bgImage = pygame.transform.scale(bgImage, [screenX, screenY])
+
+# Скорость мяча
+ballSpeedX = 4
+ballSpeedY = 4
+
+# Позиция мяча
+ballX = random.randint(20, screenX - 20)
+ballY = 50
+
+# Позиция платформы
+padX = screenX // 2
+padY = screenY // 1.5
+padSpeed = 6
+
+# Счёт
+score = 0
+font = pygame.font.SysFont(None, 36)
+
+# Загрузка картинок
+ballImage = pygame.image.load("ball.png")
+ballImage = pygame.transform.scale(ballImage, [20, 20])
+
+padImage = pygame.image.load("pad.png")
+padImage = pygame.transform.scale(padImage, [120, 20])
+
+# Rect объекты
+ball = pygame.Rect(ballX, ballY, 20, 20)
+pad  = pygame.Rect(padX, padY, 120, 20)
+
+gameover = False
+while not gameover:
+    clock.tick(60)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            gameover = True
+
+    # Управление платформой
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT] and pad.left > 0:
+        padX -= padSpeed
+    if keys[pygame.K_RIGHT] and pad.right < screenX:
+        padX += padSpeed
+
+    # Обновление позиций
+    ballX += ballSpeedX
+    ballY += ballSpeedY
+
+    ball = pygame.Rect(ballX, ballY, 20, 20)
+    pad  = pygame.Rect(padX, int(padY), 120, 20)
+
+    # Отскок от левой и правой стены
+    if ballX > screenX - 20 or ballX < 0:
+        ballSpeedX = -ballSpeedX
+
+    # Отскок от верхней стены
+    if ballY < 0:
+        ballSpeedY = -ballSpeedY
+
+    # Мяч упал вниз — минус очко
+    if ballY > screenY:
+        score -= 1
+        ballX = random.randint(20, screenX - 20)
+        ballY = 50
+        ballSpeedY = abs(ballSpeedY)  # мяч снова летит вниз
+
+    # Коллизия мяча с платформой
+    if ball.colliderect(pad) and ballSpeedY > 0:
+        ballSpeedY = -ballSpeedY
+        score += 1
+
+    # Отрисовка
+    screen.blit(bgImage, (0, 0))
+    screen.blit(ballImage, ball)
+    screen.blit(padImage, pad)
+
+    # Счёт на экране
+    scoreText = font.render("Score: " + str(score), True, (0, 0, 102))
+    screen.blit(scoreText, (10, 10))
+
+    pygame.display.flip()
+
+pygame.quit()
