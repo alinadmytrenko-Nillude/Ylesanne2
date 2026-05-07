@@ -1,7 +1,7 @@
 import pygame, random
 pygame.init()
 
-# Настройки
+# Settings
 screenX = 640
 screenY = 480
 screen = pygame.display.set_mode([screenX, screenY])
@@ -10,31 +10,31 @@ clock = pygame.time.Clock()
 bgImage = pygame.image.load("mem.png")
 bgImage = pygame.transform.scale(bgImage, [screenX, screenY])
 
-# Скорость мяча
+# Ball speed
 ballSpeedX = 4
 ballSpeedY = 4
 
-# Позиция мяча
+# Ball position
 ballX = random.randint(20, screenX - 20)
 ballY = 50
 
-# Позиция платформы
+# Pad position
 padX = screenX // 2
 padY = screenY // 1.5
 padSpeed = 6
 
-# Счёт
+# Score
 score = 0
 font = pygame.font.SysFont(None, 36)
 
-# Загрузка картинок
+# Load images
 ballImage = pygame.image.load("ball.png")
 ballImage = pygame.transform.scale(ballImage, [20, 20])
 
 padImage = pygame.image.load("pad.png")
 padImage = pygame.transform.scale(padImage, [120, 20])
 
-# Rect объекты
+# Rect objects
 ball = pygame.Rect(ballX, ballY, 20, 20)
 pad  = pygame.Rect(padX, padY, 120, 20)
 
@@ -46,46 +46,46 @@ while not gameover:
         if event.type == pygame.QUIT:
             gameover = True
 
-    # Управление платформой
+    # Pad controls
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT] and pad.left > 0:
         padX -= padSpeed
     if keys[pygame.K_RIGHT] and pad.right < screenX:
         padX += padSpeed
 
-    # Обновление позиций
+    # Update positions
     ballX += ballSpeedX
     ballY += ballSpeedY
 
     ball = pygame.Rect(ballX, ballY, 20, 20)
     pad  = pygame.Rect(padX, int(padY), 120, 20)
 
-    # Отскок от левой и правой стены
+    # Bounce off left and right walls
     if ballX > screenX - 20 or ballX < 0:
         ballSpeedX = -ballSpeedX
 
-    # Отскок от верхней стены
+    # Bounce off top wall
     if ballY < 0:
         ballSpeedY = -ballSpeedY
 
-    # Мяч упал вниз — минус очко
+    # Ball fell down — lose a point
     if ballY > screenY:
         score -= 1
         ballX = random.randint(20, screenX - 20)
         ballY = 50
-        ballSpeedY = abs(ballSpeedY)  # мяч снова летит вниз
+        ballSpeedY = abs(ballSpeedY)  # ball moves down again
 
-    # Коллизия мяча с платформой
+    # Collision between ball and pad
     if ball.colliderect(pad) and ballSpeedY > 0:
         ballSpeedY = -ballSpeedY
         score += 1
 
-    # Отрисовка
+    # Draw everything
     screen.blit(bgImage, (0, 0))
     screen.blit(ballImage, ball)
     screen.blit(padImage, pad)
 
-    # Счёт на экране
+    # Show score on screen
     scoreText = font.render("Score: " + str(score), True, (0, 0, 102))
     screen.blit(scoreText, (10, 10))
 
